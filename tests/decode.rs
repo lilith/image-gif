@@ -238,7 +238,7 @@ fn issue_209_exension_block() {
         options.allow_unknown_blocks(true);
 
         let mut normal_decoder = options.read_info(image).unwrap();
-        while let Some(_) = normal_decoder.read_next_frame().unwrap() {}
+        while normal_decoder.read_next_frame().unwrap().is_some() {}
     }
 
     // TODO: block break syntax would be neat.
@@ -302,7 +302,7 @@ fn check_last_extension_returns() {
                 break;
             }
 
-            decoder.update(&mut buf, &mut output).unwrap()
+            decoder.update(buf, &mut output).unwrap()
         };
         buf.consume(consumed);
         match result {

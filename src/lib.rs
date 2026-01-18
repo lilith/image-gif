@@ -7,6 +7,18 @@
 //!
 //! This library provides all functions necessary to de- and encode GIF files.
 //!
+//! ## no_std support
+//!
+//! This crate supports `no_std` environments with an allocator. Disable the default `std` feature:
+//!
+//! ```toml
+//! [dependencies]
+//! gif = { version = "0.15", default-features = false }
+//! ```
+//!
+//! In `no_std` mode, the crate provides its own `Read`, `Write`, and `BufRead` traits
+//! in the `gif::io` module. Implement these traits for your I/O types.
+//!
 //! ## High level interface
 //!
 //! The high level interface consists of the two types
@@ -14,7 +26,8 @@
 //!
 //! ### Decoding GIF files
 //!
-//! ```rust
+#![cfg_attr(feature = "std", doc = "```rust")]
+#![cfg_attr(not(feature = "std"), doc = "```rust,ignore")]
 //! // Open the file
 //! use std::fs::File;
 //! let mut decoder = gif::DecodeOptions::new();
@@ -34,7 +47,8 @@
 //!
 //! The encoder can be used so save simple computer generated images:
 //!
-//! ```rust
+#![cfg_attr(feature = "std", doc = "```rust")]
+#![cfg_attr(not(feature = "std"), doc = "```rust,ignore")]
 //! use gif::{Frame, Encoder, Repeat};
 //! use std::fs::File;
 //! use std::borrow::Cow;
@@ -71,8 +85,11 @@
 //! [`Frame::from_*`](struct.Frame.html) can be used to convert a true color image to a paletted
 //! image with a maximum of 256 colors:
 //!
-//! ```rust
-//! # #[cfg(feature = "color_quant")] {
+#![cfg_attr(all(feature = "std", feature = "color_quant"), doc = "```rust")]
+#![cfg_attr(
+    not(all(feature = "std", feature = "color_quant")),
+    doc = "```rust,ignore"
+)]
 //! use std::fs::File;
 //!
 //! // Get pixel data from some source
@@ -84,47 +101,26 @@
 //! let mut encoder = gif::Encoder::new(&mut image, frame.width, frame.height, &[]).unwrap();
 //! // Write frame to file
 //! encoder.write_frame(&frame).unwrap();
-//! # }
 //! ```
-
-// TODO: make this compile
-// ```rust
-// use gif::{Frame, Encoder};
-// use std::fs::File;
-// let color_map = &[0, 0, 0, 0xFF, 0xFF, 0xFF];
-// let mut frame = Frame::default();
-// // Generate checkerboard lattice
-// for (i, j) in (0..10).zip(0..10) {
-//     frame.buffer.push(if (i * j) % 2 == 0 {
-//         1
-//     } else {
-//         0
-//     })
-// }
-// # (|| {
-// {
-// let mut file = File::create("test.gif")?;
-// let mut encoder = Encoder::new(&mut file, 100, 100);
-// encoder.write_global_palette(color_map)?.write_frame(&frame)
-// }
-// # })().unwrap();
-// ```
 #![deny(missing_docs)]
-#![cfg(feature = "std")]
 #![allow(unknown_lints)] // Certain lints only apply to later versions of Rust
 #![allow(clippy::manual_range_contains)]
 #![allow(clippy::new_without_default)]
 #![deny(clippy::alloc_instead_of_core)]
 #![deny(clippy::std_instead_of_alloc)]
 #![deny(clippy::std_instead_of_core)]
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
 extern crate alloc;
+
+#[cfg(feature = "std")]
 extern crate std;
 
 mod common;
 mod encoder;
+/// I/O traits and types for no_std support.
+pub mod io;
 mod reader;
 mod traits;
 

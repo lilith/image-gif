@@ -49,7 +49,7 @@ impl PixelConverter {
     ) -> Result<usize, DecodingError> {
         let pixel_bytes = memory_limit
             .buffer_size(self.color_output, frame.width, frame.height)
-            .ok_or_else(|| DecodingError::OutOfMemory)?;
+            .ok_or(DecodingError::OutOfMemory)?;
 
         debug_assert_eq!(
             pixel_bytes,

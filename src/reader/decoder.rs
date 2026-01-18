@@ -1,16 +1,15 @@
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::fmt;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp;
 use core::default::Default;
 use core::mem;
 use core::num::NonZeroUsize;
 
-use std::error;
-use std::io;
-
 use crate::common::{AnyExtension, Block, DisposalMethod, Extension, Frame};
+use crate::io;
 use crate::reader::DecodeOptions;
 use crate::MemoryLimit;
 
@@ -22,22 +21,17 @@ pub const PLTE_CHANNELS: usize = 3;
 /// An error returned in the case of the image not being formatted properly.
 #[derive(Debug)]
 pub struct DecodingFormatError {
-    underlying: Box<dyn error::Error + Send + Sync + 'static>,
+    message: String,
 }
 
 impl fmt::Display for DecodingFormatError {
     #[cold]
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&*self.underlying, fmt)
+        fmt::Display::fmt(&self.message, fmt)
     }
 }
 
-impl error::Error for DecodingFormatError {
-    #[cold]
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        Some(&*self.underlying as _)
-    }
-}
+impl core::error::Error for DecodingFormatError {}
 
 /// Decoding error.
 #[derive(Debug)]
@@ -57,15 +51,15 @@ pub enum DecodingError {
     LzwError(LzwError),
     /// Returned if the image is found to be malformed.
     Format(DecodingFormatError),
-    /// Wraps `std::io::Error`.
-    Io(io::Error),
+    /// Wraps an I/O error.
+    Io(io::IoError),
 }
 
 impl DecodingError {
     #[cold]
     pub(crate) fn format(err: &'static str) -> Self {
         Self::Format(DecodingFormatError {
-            underlying: err.into(),
+            message: String::from(err),
         })
     }
 }
@@ -86,16 +80,19 @@ impl fmt::Display for DecodingError {
     }
 }
 
-impl error::Error for DecodingError {
+impl core::error::Error for DecodingError {
     #[cold]
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match *self {
             Self::OutOfMemory => None,
             Self::MemoryLimit => None,
             Self::DecoderNotFound => None,
             Self::EndCodeNotFound => None,
             Self::UnexpectedEof => None,
+            #[cfg(feature = "std")]
             Self::LzwError(ref err) => Some(err),
+            #[cfg(not(feature = "std"))]
+            Self::LzwError(_) => None,
             Self::Format(ref err) => Some(err),
             Self::Io(ref err) => Some(err),
         }
@@ -109,10 +106,18 @@ impl From<LzwError> for DecodingError {
     }
 }
 
-impl From<io::Error> for DecodingError {
+impl From<io::IoError> for DecodingError {
     #[inline]
-    fn from(err: io::Error) -> Self {
+    fn from(err: io::IoError) -> Self {
         Self::Io(err)
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<std::io::Error> for DecodingError {
+    #[inline]
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(io::IoError::from(err))
     }
 }
 
@@ -822,9 +827,8 @@ impl StreamingDecoder {
                         goto!(0, DecodeSubBlock(0), emit Decoded::BytesDecoded(bytes_len))
                     } else if matches!(status, LzwStatus::Ok) {
                         goto!(0, DecodeSubBlock(0), emit Decoded::Nothing)
-                    } else if matches!(status, LzwStatus::Done) {
-                        goto!(0, FrameDecoded)
                     } else {
+                        // LzwStatus::Done or other status
                         goto!(0, FrameDecoded)
                     }
                 }
@@ -866,5 +870,5 @@ impl StreamingDecoder {
 
 #[test]
 fn error_cast() {
-    let _: Box<dyn error::Error> = DecodingError::format("testing").into();
+    let _: Box<dyn core::error::Error> = DecodingError::format("testing").into();
 }

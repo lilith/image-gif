@@ -4,10 +4,9 @@ use core::convert::{TryFrom, TryInto};
 use core::iter::FusedIterator;
 use core::mem;
 use core::num::NonZeroU64;
-use std::io;
-use std::io::prelude::*;
 
 use crate::common::{Block, Frame};
+use crate::io::{BufRead, BufReader, ReadBuf};
 use crate::{AnyExtension, Extension, Repeat};
 
 mod converter;
@@ -205,18 +204,18 @@ impl DecodeOptions {
     /// Reads the logical screen descriptor including the global color palette
     ///
     /// Returns a [`Decoder`]. All decoder configuration has to be done beforehand.
-    pub fn read_info<R: Read>(self, r: R) -> Result<Decoder<R>, DecodingError> {
+    pub fn read_info<R: ReadBuf>(self, r: R) -> Result<Decoder<R>, DecodingError> {
         Decoder::with_no_init(r, StreamingDecoder::with_options(&self), self).init()
     }
 }
 
-struct ReadDecoder<R: Read> {
-    reader: io::BufReader<R>,
+struct ReadDecoder<R: ReadBuf> {
+    reader: BufReader<R>,
     decoder: StreamingDecoder,
     at_eof: bool,
 }
 
-impl<R: Read> ReadDecoder<R> {
+impl<R: ReadBuf> ReadDecoder<R> {
     #[inline(never)]
     fn decode_next(
         &mut self,
@@ -243,7 +242,7 @@ impl<R: Read> ReadDecoder<R> {
         Ok(None)
     }
 
-    fn into_inner(self) -> io::BufReader<R> {
+    fn into_inner(self) -> BufReader<R> {
         self.reader
     }
 
@@ -255,6 +254,7 @@ impl<R: Read> ReadDecoder<R> {
         }
     }
 }
+
 /// Headers for supported extensions.
 const EXT_NAME_NETSCAPE: &[u8] = b"NETSCAPE2.0";
 const EXT_NAME_XMP: &[u8] = b"XMP DataXMP";
@@ -272,7 +272,7 @@ enum AppExtensionState {
 
 #[allow(dead_code)]
 /// GIF decoder. Create [`DecodeOptions`] to get started, and call [`DecodeOptions::read_info`].
-pub struct Decoder<R: Read> {
+pub struct Decoder<R: ReadBuf> {
     decoder: ReadDecoder<R>,
     pixel_converter: PixelConverter,
     memory_limit: MemoryLimit,
@@ -287,10 +287,7 @@ pub struct Decoder<R: Read> {
     icc_profile: Option<Vec<u8>>,
 }
 
-impl<R> Decoder<R>
-where
-    R: Read,
-{
+impl<R: ReadBuf> Decoder<R> {
     /// Create a new decoder with default options.
     #[inline]
     pub fn new(reader: R) -> Result<Self, DecodingError> {
@@ -307,7 +304,7 @@ where
     fn with_no_init(reader: R, decoder: StreamingDecoder, options: DecodeOptions) -> Self {
         Self {
             decoder: ReadDecoder {
-                reader: io::BufReader::new(reader),
+                reader: BufReader::new(reader),
                 decoder,
                 at_eof: false,
             },
@@ -607,8 +604,8 @@ where
         self.icc_profile.as_deref()
     }
 
-    /// Abort decoding and recover the `io::Read` instance
-    pub fn into_inner(self) -> io::BufReader<R> {
+    /// Abort decoding and recover the underlying reader wrapped in BufReader
+    pub fn into_inner(self) -> BufReader<R> {
         self.decoder.into_inner()
     }
 
@@ -627,7 +624,7 @@ where
     }
 }
 
-impl<R: Read> IntoIterator for Decoder<R> {
+impl<R: ReadBuf> IntoIterator for Decoder<R> {
     type Item = Result<Frame<'static>, DecodingError>;
     type IntoIter = DecoderIter<R>;
 
@@ -641,23 +638,23 @@ impl<R: Read> IntoIterator for Decoder<R> {
 }
 
 /// Use `decoder.into_iter()` to iterate over the frames
-pub struct DecoderIter<R: Read> {
+pub struct DecoderIter<R: ReadBuf> {
     inner: Decoder<R>,
     ended: bool,
 }
 
-impl<R: Read> DecoderIter<R> {
-    /// Abort decoding and recover the `io::Read` instance
+impl<R: ReadBuf> DecoderIter<R> {
+    /// Abort decoding and recover the underlying reader wrapped in BufReader
     ///
     /// Use `for frame in iter.by_ref()` to be able to call this afterwards.
-    pub fn into_inner(self) -> io::BufReader<R> {
+    pub fn into_inner(self) -> BufReader<R> {
         self.inner.into_inner()
     }
 }
 
-impl<R: Read> FusedIterator for DecoderIter<R> {}
+impl<R: ReadBuf> FusedIterator for DecoderIter<R> {}
 
-impl<R: Read> Iterator for DecoderIter<R> {
+impl<R: ReadBuf> Iterator for DecoderIter<R> {
     type Item = Result<Frame<'static>, DecodingError>;
 
     fn next(&mut self) -> Option<Self::Item> {
