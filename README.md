@@ -2,6 +2,31 @@
 
 GIF en- and decoder written in Rust ([API Documentation](https://docs.rs/gif/)).
 
+## no_std Support
+
+This fork adds `no_std` compatibility while maintaining full `std` support.
+
+**Features:**
+- `std` (default) - Use standard library I/O traits
+- No default features - `no_std` mode with `alloc` crate
+
+**Usage:**
+```toml
+# std mode (default)
+gif = "0.15"
+
+# no_std mode
+gif = { version = "0.15", default-features = false }
+```
+
+**Requirements:**
+- Rust 1.81+ (for `core::error::Error`)
+- `alloc` crate available in no_std environments
+
+In no_std mode, use `&[u8]` for reading and `Vec<u8>` for writing.
+
+---
+
 # GIF encoding and decoding library
 
 This library provides all functions necessary to de- and encode GIF files. 
